@@ -1,17 +1,45 @@
-export const metadata = {
-  title: "Admin Login — CivicReport",
-  description: "Secure admin login for the CivicReport dashboard.",
-};
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function AdminLoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        throw signInError;
+      }
+
+      router.push("/admin/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <div
       className="page-container-narrow"
       style={{ paddingTop: "5rem", paddingBottom: "5rem" }}
     >
-      {/* Card */}
       <div className="card">
-        {/* Header */}
         <div className="mb-6 pb-5" style={{ borderBottom: "1px solid var(--color-border)" }}>
           <p
             className="text-xs font-semibold uppercase tracking-widest mb-1"
@@ -22,8 +50,22 @@ export default function AdminLoginPage() {
           <h1 style={{ fontSize: "1.375rem" }}>Sign in to Dashboard</h1>
         </div>
 
-        {/* Form placeholder */}
-        <div className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4">
+          {error && (
+            <div
+              style={{
+                padding: "0.75rem",
+                borderRadius: "4px",
+                backgroundColor: "var(--color-status-submitted-bg)",
+                border: "1px solid var(--color-status-submitted-ring)",
+                color: "var(--color-status-submitted-text)",
+                fontSize: "0.875rem",
+              }}
+            >
+              {error}
+            </div>
+          )}
+          
           <div>
             <label className="form-label" htmlFor="email">
               Email address
@@ -33,8 +75,10 @@ export default function AdminLoginPage() {
               type="email"
               className="form-input"
               placeholder="admin@example.gov.in"
-              disabled
-              aria-disabled="true"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={isLoading}
             />
           </div>
 
@@ -47,28 +91,21 @@ export default function AdminLoginPage() {
               type="password"
               className="form-input"
               placeholder="••••••••"
-              disabled
-              aria-disabled="true"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={isLoading}
             />
           </div>
 
           <button
-            type="button"
+            type="submit"
             className="btn-primary w-full justify-center mt-2"
-            disabled
-            aria-disabled="true"
-            style={{ opacity: 0.6, cursor: "not-allowed" }}
+            disabled={isLoading}
           >
-            Sign in
+            {isLoading ? "Signing in..." : "Sign in"}
           </button>
-
-          <p
-            className="text-xs text-center"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            Authentication coming soon — Supabase Auth will be wired in Phase 8.
-          </p>
-        </div>
+        </form>
       </div>
     </div>
   );

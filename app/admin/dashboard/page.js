@@ -1,7 +1,8 @@
-export const metadata = {
-  title: "Admin Dashboard — CivicReport",
-  description: "Manage all civic issue reports — update statuses and filter by category.",
-};
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 const STATUS_COLORS = {
   SUBMITTED:    { bg: "var(--color-status-submitted-bg)",    color: "var(--color-status-submitted-text)" },
@@ -10,12 +11,84 @@ const STATUS_COLORS = {
   RESOLVED:     { bg: "var(--color-status-resolved-bg)",     color: "var(--color-status-resolved-text)" },
 };
 
-/* Placeholder rows so the table shell looks realistic */
-const PLACEHOLDER_ROWS = [
-  { id: "—", category: "—", description: "Reports will appear here after Supabase is connected.", urgency: "—", status: "SUBMITTED", date: "—" },
-];
-
 export default function AdminDashboardPage() {
+  const router = useRouter();
+  const [reports, setReports] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push("/admin/login");
+      } else {
+        setIsAuthChecking(false);
+        fetchReports();
+      }
+    }
+
+    // Set up auth listener for future state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!session) {
+          router.push("/admin/login");
+        }
+      }
+    );
+
+    checkAuth();
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
+
+  async function fetchReports() {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from("reports")
+      .select("*")
+      .order("created_at", { ascending: false });
+      
+    if (error) {
+      console.error("Error fetching reports:", error);
+    } else {
+      setReports(data || []);
+    }
+    setIsLoading(false);
+  }
+
+  async function handleStatusChange(id, newStatus) {
+    // Optimistic update
+    setReports(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
+
+    const { error } = await supabase
+      .from("reports")
+      .update({ status: newStatus })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error updating status:", error);
+      // Revert if error
+      fetchReports();
+      alert("Failed to update status: " + error.message);
+    }
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/admin/login");
+  }
+
+  if (isAuthChecking) {
+    return (
+      <div className="page-container flex items-center justify-center">
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Checking authentication...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="page-container" style={{ maxWidth: "72rem" }}>
       {/* Page header */}
@@ -26,18 +99,27 @@ export default function AdminDashboardPage() {
             All citizen-submitted reports — filter, review, and update status.
           </p>
         </div>
-        <span
-          className="text-xs font-semibold px-2.5 py-1 rounded-full"
-          style={{
-            backgroundColor: "var(--color-status-acknowledged-bg)",
-            color: "var(--color-status-acknowledged-text)",
-          }}
-        >
-          Admin view
-        </span>
+        <div className="flex items-center gap-4">
+          <span
+            className="text-xs font-semibold px-2.5 py-1 rounded-full"
+            style={{
+              backgroundColor: "var(--color-status-acknowledged-bg)",
+              color: "var(--color-status-acknowledged-text)",
+            }}
+          >
+            Admin view
+          </span>
+          <button 
+            onClick={handleLogout}
+            className="btn-secondary"
+            style={{ padding: "0.25rem 0.75rem", fontSize: "0.75rem" }}
+          >
+            Log out
+          </button>
+        </div>
       </div>
 
-      {/* Filter bar placeholder */}
+      {/* Filter bar placeholder (Disabled for now as per MVP requirements, just keeping visual shell) */}
       <div
         className="card mb-4 flex flex-wrap gap-3 items-center"
         style={{ backgroundColor: "var(--color-neutral-50)", padding: "0.75rem 1rem" }}
@@ -84,51 +166,69 @@ export default function AdminDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {PLACEHOLDER_ROWS.map((row, i) => (
-                <tr
-                  key={i}
-                  style={{ borderBottom: "1px solid var(--color-border)" }}
-                >
-                  <td style={{ padding: "0.75rem 1rem", color: "var(--color-text-muted)", fontFamily: "monospace", fontSize: "0.8125rem" }}>{row.id}</td>
-                  <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-600)" }}>{row.category}</td>
-                  <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-700)", maxWidth: "18rem" }}>
-                    <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {row.description}
-                    </span>
-                  </td>
-                  <td style={{ padding: "0.75rem 1rem", textAlign: "center", color: "var(--color-neutral-600)" }}>{row.urgency}</td>
-                  <td style={{ padding: "0.75rem 1rem" }}>
-                    <span
-                      className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                      style={{
-                        backgroundColor: STATUS_COLORS[row.status]?.bg,
-                        color: STATUS_COLORS[row.status]?.color,
-                      }}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: "0.75rem 1rem", color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>{row.date}</td>
-                  <td style={{ padding: "0.75rem 1rem" }}>
-                    <select
-                      disabled
-                      aria-label="Update status"
-                      className="form-input"
-                      style={{ width: "auto", fontSize: "0.8125rem", padding: "0.25rem 0.5rem", opacity: 0.5, cursor: "not-allowed" }}
-                    >
-                      <option>Update status</option>
-                    </select>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-muted)" }}>
+                    Loading reports...
                   </td>
                 </tr>
-              ))}
+              ) : reports.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-muted)" }}>
+                    No reports found.
+                  </td>
+                </tr>
+              ) : (
+                reports.map((row) => (
+                  <tr
+                    key={row.id}
+                    style={{ borderBottom: "1px solid var(--color-border)" }}
+                  >
+                    <td style={{ padding: "0.75rem 1rem", color: "var(--color-text-muted)", fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                      {row.id.split("-")[0]}
+                    </td>
+                    <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-600)" }}>{row.category}</td>
+                    <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-700)", maxWidth: "18rem" }}>
+                      <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }} title={row.description}>
+                        {row.description}
+                      </span>
+                    </td>
+                    <td style={{ padding: "0.75rem 1rem", textAlign: "center", color: "var(--color-neutral-600)" }}>{row.urgency}</td>
+                    <td style={{ padding: "0.75rem 1rem" }}>
+                      <span
+                        className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                        style={{
+                          backgroundColor: STATUS_COLORS[row.status]?.bg,
+                          color: STATUS_COLORS[row.status]?.color,
+                        }}
+                      >
+                        {row.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: "0.75rem 1rem", color: "var(--color-text-muted)", whiteSpace: "nowrap", fontSize: "0.8125rem" }}>
+                      {new Date(row.created_at).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: "0.75rem 1rem" }}>
+                      <select
+                        aria-label="Update status"
+                        className="form-input"
+                        value={row.status}
+                        onChange={(e) => handleStatusChange(row.id, e.target.value)}
+                        style={{ width: "auto", fontSize: "0.8125rem", padding: "0.25rem 0.5rem" }}
+                      >
+                        <option value="SUBMITTED">SUBMITTED</option>
+                        <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+                        <option value="IN_PROGRESS">IN_PROGRESS</option>
+                        <option value="RESOLVED">RESOLVED</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
-
-      <p className="mt-4 text-xs text-center" style={{ color: "var(--color-text-muted)" }}>
-        Auth guard and live data will be wired in Phase 8.
-      </p>
     </div>
   );
 }

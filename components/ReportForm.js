@@ -192,6 +192,17 @@ export default function ReportForm() {
 
       if (insertError) throw new Error(`Could not save report: ${insertError.message}`);
 
+      // ── 5. Save report ID to localStorage ────────────────────
+      try {
+        const savedIds = JSON.parse(localStorage.getItem("myReportIds") || "[]");
+        if (!savedIds.includes(inserted.id)) {
+          savedIds.push(inserted.id);
+          localStorage.setItem("myReportIds", JSON.stringify(savedIds));
+        }
+      } catch (storageErr) {
+        console.warn("Failed to save report ID to localStorage", storageErr);
+      }
+
       setNewReportId(inserted.id);
       setFormState(FORM.SUCCESS);
 
