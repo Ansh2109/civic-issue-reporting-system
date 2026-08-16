@@ -155,10 +155,27 @@ export default function ReportForm() {
 
       const photoUrl = urlData.publicUrl;
 
-      // ── 3. Insert report row ─────────────────────────────────
-      // NOTE: category and urgency are placeholders — they will be replaced
-      // by the AI classification step (Groq/Gemini) in a future task.
-      // The DB schema requires NOT NULL, so we default to safe values.
+      // ── 3. Classify issue description using AI ───────────────
+      let category = "Other";
+      let urgency = 3;
+      try {
+        const classifyRes = await fetch("/api/classify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: description.trim() }),
+        });
+        if (classifyRes.ok) {
+          const classification = await classifyRes.json();
+          if (classification.category) category = classification.category;
+          if (classification.urgency) urgency = classification.urgency;
+        } else {
+          console.warn("Classification failed (status", classifyRes.status, "), using defaults");
+        }
+      } catch (err) {
+        console.warn("Classification error, using defaults:", err);
+      }
+
+      // ── 4. Insert report row ─────────────────────────────────
       const { data: inserted, error: insertError } = await supabase
         .from("reports")
         .insert({
@@ -166,8 +183,8 @@ export default function ReportForm() {
           description: description.trim(),
           lat:         coords.lat,
           lng:         coords.lng,
-          category:    "Other",     // TODO: replace with AI classification
-          urgency:     3,           // TODO: replace with AI classification (1–5)
+          category:    category,
+          urgency:     urgency,
           status:      "SUBMITTED",
         })
         .select("id")
