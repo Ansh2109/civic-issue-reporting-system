@@ -1,3 +1,5 @@
+import ReportForm from "@/components/ReportForm";
+
 export const metadata = {
   title: "Report an Issue — CivicReport",
   description: "Submit a civic issue report with photo and your GPS location.",
@@ -14,16 +16,9 @@ export default function ReportPage() {
         </p>
       </div>
 
-      {/* Placeholder form card */}
+      {/* Form — client component (uses GPS + state + Supabase) */}
       <div className="card">
-        <p
-          className="text-sm text-center py-8"
-          style={{ color: "var(--color-text-muted)" }}
-        >
-          <span className="block text-2xl mb-3">📋</span>
-          Form coming soon — photo upload, GPS capture, and AI-powered
-          category classification will appear here.
-        </p>
+        <ReportForm />
       </div>
     </div>
   );
