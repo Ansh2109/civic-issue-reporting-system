@@ -21,7 +21,10 @@ export default function ReportForm() {
   const [photo, setPhoto]         = useState(null);   // File object
   const [preview, setPreview]     = useState(null);   // Object URL for <img>
   const [photoError, setPhotoError] = useState("");
-  const fileInputRef = useRef(null);
+  const [cameraState, setCameraState] = useState("idle");
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const canvasRef = useRef(null);
 
   /* ── Description state ──────────────────────────────────── */
   const [description, setDescription] = useState("");
@@ -36,15 +39,23 @@ export default function ReportForm() {
   const [submitError, setSubmitError] = useState("");
   const [submittedReport, setSubmittedReport] = useState(null);
 
-  /* ── Auto-request GPS on mount ───────────────────────────── */
+  /* ── Auto-request GPS & Camera on mount ──────────────────── */
   useEffect(() => {
     requestLocation();
+    startCamera();
+    return () => stopCamera();
   }, []);
 
   /* ── Revoke preview URL when component unmounts ─────────── */
   useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview); };
   }, [preview]);
+
+  useEffect(() => {
+    if (cameraState === "active" && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraState]);
 
   /* ── Handlers ────────────────────────────────────────────── */
 
@@ -80,35 +91,64 @@ export default function ReportForm() {
     );
   }
 
-  function handlePhotoChange(e) {
-    const file = e.target.files?.[0];
-    setPhotoError("");
-
-    if (!file) return;
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setPhotoError("Only JPEG, PNG, WebP, or HEIC images are accepted.");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
-    if (file.size > MAX_FILE_BYTES) {
-      setPhotoError(`Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed is 5 MB.`);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-
-    // Revoke previous preview before creating a new one
-    if (preview) URL.revokeObjectURL(preview);
-    setPhoto(file);
-    setPreview(URL.createObjectURL(file));
   }
 
-  function removePhoto() {
+  async function startCamera() {
+    setCameraState("requesting");
+    setPhotoError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+      });
+      streamRef.current = stream;
+      setCameraState("active");
+    } catch (err) {
+      console.error("Camera access denied or failed:", err);
+      setCameraState("denied");
+      setPhotoError("Camera access is required to submit a report — please allow camera access.");
+    }
+  }
+
+  function capturePhoto() {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setPhotoError("Failed to capture photo.");
+        return;
+      }
+      
+      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
+      setPhoto(file);
+      
+      if (preview) URL.revokeObjectURL(preview);
+      setPreview(URL.createObjectURL(file));
+      
+      stopCamera();
+      setCameraState("idle");
+    }, "image/jpeg", 0.85);
+  }
+
+  function retakePhoto() {
     if (preview) URL.revokeObjectURL(preview);
     setPhoto(null);
     setPreview(null);
     setPhotoError("");
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    startCamera();
   }
 
   async function handleSubmit(e) {
@@ -294,11 +334,13 @@ export default function ReportForm() {
             style={{ justifyContent: "center", padding: "0.75rem 1.5rem" }}
             onClick={() => {
               setFormState(FORM.IDLE);
+              if (preview) URL.revokeObjectURL(preview);
               setPhoto(null);
               setPreview(null);
               setDescription("");
               setSubmittedReport(null);
               setSubmitError("");
+              startCamera();
             }}
           >
             Submit another report
@@ -320,48 +362,81 @@ export default function ReportForm() {
         <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>A clear photo helps city staff locate and assess the issue quickly.</p>
 
         {!preview ? (
-          <label
-            htmlFor="photo-upload"
+          <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: "0.5rem",
-              padding: "2rem",
+              gap: "1rem",
+              padding: "1rem",
               border: "1px dashed var(--color-border)",
               borderRadius: "4px",
-              cursor: "pointer",
               backgroundColor: "var(--color-neutral-50)",
-              transition: "border-color 140ms ease",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-accent)")}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
           >
-            <span style={{ fontSize: "1.75rem" }}>📷</span>
-            <span className="text-sm" style={{ color: "var(--color-text-muted)", fontWeight: 500 }}>
-              Take a photo
-            </span>
-            <span className="text-xs" style={{ color: "var(--color-text-faint)" }}>
-              JPEG, PNG, WebP or HEIC · max 5 MB
-            </span>
-            <input
-              id="photo-upload"
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
-              capture="environment"
-              onChange={handlePhotoChange}
-              disabled={isSubmitting}
-              style={{ display: "none" }}
-            />
-          </label>
+            {cameraState === "idle" && (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={startCamera}
+                disabled={isSubmitting}
+              >
+                Start Camera
+              </button>
+            )}
+            
+            {cameraState === "requesting" && (
+              <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Requesting camera access...</p>
+            )}
+            
+            {cameraState === "active" && (
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{ width: "100%", maxHeight: "400px", objectFit: "cover", borderRadius: "4px", backgroundColor: "#000" }}
+                />
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={capturePhoto}
+                  disabled={isSubmitting}
+                >
+                  Capture Photo
+                </button>
+              </div>
+            )}
+            
+            {cameraState === "denied" && (
+              <div style={{ textAlign: "center" }}>
+                <p className="text-sm" style={{ color: "#dc2626", marginBottom: "0.75rem" }}>
+                  {photoError || "Camera access denied."}
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  onClick={startCamera}
+                >
+                  Try Again
+                </button>
+              </div>
+            )}
+
+            {/* Note: Live camera capture requires HTTPS or localhost to function */}
+            <p className="text-[11px]" style={{ color: "var(--color-text-faint)", textAlign: "center", marginTop: "0.5rem" }}>
+              Live camera capture requires a secure connection (HTTPS) or localhost.
+            </p>
+            <canvas ref={canvasRef} style={{ display: "none" }} />
+          </div>
         ) : (
-          <div style={{ position: "relative", display: "inline-block" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
-              alt="Selected photo preview"
+              alt="Captured preview"
               style={{
                 display: "block",
                 maxWidth: "100%",
@@ -371,30 +446,30 @@ export default function ReportForm() {
                 objectFit: "cover",
               }}
             />
-            <button
-              type="button"
-              onClick={removePhoto}
-              disabled={isSubmitting}
-              aria-label="Remove photo"
-              style={{
-                position: "absolute",
-                top: "0.5rem",
-                right: "0.5rem",
-                width: "28px",
-                height: "28px",
-                borderRadius: "50%",
-                backgroundColor: "#1C1917CC",
-                border: "none",
-                color: "#fff",
-                fontSize: "0.75rem",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              ✕
-            </button>
+            <div style={{ display: "flex", gap: "1rem" }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={retakePhoto}
+                disabled={isSubmitting}
+              >
+                Retake
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  if (!description.trim()) {
+                    document.getElementById("description")?.focus();
+                  } else {
+                    document.getElementById("submit-report-btn")?.click();
+                  }
+                }}
+                disabled={isSubmitting}
+              >
+                Use this photo
+              </button>
+            </div>
           </div>
         )}
 
