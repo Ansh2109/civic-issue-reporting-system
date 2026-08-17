@@ -87,6 +87,10 @@ export default function AdminDashboardPage() {
   }
 
   async function handleStatusChange(id, newStatus) {
+    const report = reports.find(r => r.id === id);
+    const oldStatus = report ? report.status : null;
+    if (oldStatus === newStatus) return;
+
     // Optimistic update
     setReports(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
 
@@ -100,6 +104,21 @@ export default function AdminDashboardPage() {
       // Revert if error
       fetchReports();
       alert("Failed to update status: " + error.message);
+      return;
+    }
+    
+    if (oldStatus) {
+      const { error: historyError } = await supabase
+        .from("report_updates")
+        .insert({
+          report_id: id,
+          old_status: oldStatus,
+          new_status: newStatus
+        });
+        
+      if (historyError) {
+        console.error("Failed to insert report_updates:", historyError);
+      }
     }
   }
 

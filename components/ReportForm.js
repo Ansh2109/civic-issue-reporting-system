@@ -199,7 +199,7 @@ export default function ReportForm() {
       const photoUrl = urlData.publicUrl;
 
       // ── 3. Classify issue description using AI ───────────────
-      let category = "Other";
+      let category = "other";
       let urgency = 3;
       try {
         const classifyRes = await fetch("/api/classify", {

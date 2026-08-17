@@ -166,6 +166,15 @@ export default function WorkerDashboardPage() {
         
       if (updateError) throw updateError;
       
+      const report = reports.find(r => r.id === resolvingId);
+      if (report && report.status !== "RESOLVED") {
+        await supabase.from("report_updates").insert({
+          report_id: resolvingId,
+          old_status: report.status,
+          new_status: "RESOLVED"
+        });
+      }
+      
       setResolvingId(null);
       setPhoto(null);
       if (preview) URL.revokeObjectURL(preview);

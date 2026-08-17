@@ -22,14 +22,10 @@ export default function MapPage() {
   useEffect(() => {
     async function fetchReports() {
       try {
-        const { data, error: err } = await supabase
-          .from("reports")
-          .select("*")
-          .neq("status", "RESOLVED")
-          .order("created_at", { ascending: false });
-
-        if (err) throw err;
-        setReports(data || []);
+        const res = await fetch("/api/map/reports");
+        if (!res.ok) throw new Error("Failed to load map data");
+        const data = await res.json();
+        setReports(data.reports || []);
       } catch (err) {
         console.error("Error fetching reports:", err);
         setError("Failed to load reports.");

@@ -1,0 +1,16 @@
+﻿
+> civic-issue-reporting-system@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.3.1 (Turbopack)
+- Environments: .env.local
+Γ£ô Running next.config.mjs took 14ms
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 918ms
+  Running TypeScript ...
+  Finished TypeScript in 2ms ...
+  Collecting page data using 15 workers ...
+  Generating static pages using 15 workers (0/16) ...
+  Generating static pages using 15 workers (4/16) 
+  Generating static pages using 15 workers (8/16) 

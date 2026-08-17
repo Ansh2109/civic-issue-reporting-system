@@ -30,6 +30,7 @@ export default function TrackReportPage({ params }) {
   }, [params]);
 
   const [report, setReport] = useState(null);
+  const [updates, setUpdates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -38,7 +39,7 @@ export default function TrackReportPage({ params }) {
 
     async function fetchReport() {
       setIsLoading(true);
-      const { data, error: err } = await supabase
+      const { data: reportData, error: err } = await supabase
         .from("reports")
         .select("*")
         .eq("id", id)
@@ -48,7 +49,18 @@ export default function TrackReportPage({ params }) {
         console.error("Error fetching report:", err);
         setError("Report not found");
       } else {
-        setReport(data);
+        setReport(reportData);
+        
+        // Fetch updates
+        const { data: updateData, error: updateErr } = await supabase
+          .from("report_updates")
+          .select("*")
+          .eq("report_id", id)
+          .order("changed_at", { ascending: true });
+          
+        if (!updateErr && updateData) {
+          setUpdates(updateData);
+        }
       }
       setIsLoading(false);
     }
@@ -77,7 +89,12 @@ export default function TrackReportPage({ params }) {
     );
   }
 
-  const currentStatusIndex = STATUS_FLOW.indexOf(report.status);
+  const timeline = [
+    { status: "SUBMITTED", timestamp: report.created_at }
+  ];
+  updates.forEach(u => {
+    timeline.push({ status: u.new_status, timestamp: u.changed_at });
+  });
 
   return (
     <div className="page-container-narrow">
@@ -94,44 +111,38 @@ export default function TrackReportPage({ params }) {
             Ticket: {report.ticket_number}
           </p>
         </div>
-
-        {/* Status Flow Indicator */}
+        
+        {/* Real Status Timeline */}
         <div className="mb-10 mt-8">
           <p className="text-xs font-semibold uppercase tracking-widest mb-4 text-center" style={{ color: "var(--color-text-muted)" }}>
-            Status Tracker
+            Status History
           </p>
-          <div className="relative flex justify-between items-center px-4">
-            {/* Background line */}
-            <div className="absolute left-4 right-4 top-1/2 -z-10 h-0.5 -translate-y-1/2" style={{ backgroundColor: "var(--color-neutral-200)" }} />
-            {/* Filled progress line */}
-            <div 
-              className="absolute left-4 top-1/2 -z-10 h-0.5 -translate-y-1/2 transition-all duration-500" 
-              style={{ 
-                backgroundColor: STATUS_COLORS[report.status]?.color || "var(--color-accent)", 
-                width: `calc(${(currentStatusIndex / (STATUS_FLOW.length - 1)) * 100}% - ${currentStatusIndex === 0 ? 0 : 32}px)`
-              }} 
-            />
-            {STATUS_FLOW.map((status, index) => {
-              const isPast = index < currentStatusIndex;
-              const isCurrent = index === currentStatusIndex;
-              
-              const bg = isCurrent || isPast ? STATUS_COLORS[status]?.bg : "var(--color-neutral-100)";
-              const color = isCurrent ? STATUS_COLORS[status]?.color : (isPast ? "var(--color-text-muted)" : "var(--color-text-faint)");
-              const border = isCurrent || isPast ? STATUS_COLORS[status]?.color : "var(--color-border)";
-              
+          <div className="flex flex-col gap-4 px-4 sm:px-12">
+            {timeline.map((event, index) => {
+              const isLast = index === timeline.length - 1;
               return (
-                <div key={status} className="flex flex-col items-center gap-2 relative z-10" style={{ width: "80px" }}>
+                <div key={index} className="flex items-start gap-4 relative">
+                  {!isLast && (
+                    <div 
+                      className="absolute left-3 top-6 bottom-[-1rem] w-0.5" 
+                      style={{ backgroundColor: "var(--color-neutral-200)", transform: "translateX(-50%)" }}
+                    />
+                  )}
                   <div 
-                    className="w-4 h-4 rounded-full border-2 bg-white" 
+                    className="w-6 h-6 rounded-full border-2 flex-shrink-0 z-10 mt-0.5"
                     style={{ 
-                      backgroundColor: bg,
-                      borderColor: border,
-                      boxShadow: isCurrent ? "0 0 0 4px var(--color-surface), 0 0 0 6px " + border : "none"
-                    }} 
+                      backgroundColor: STATUS_COLORS[event.status]?.bg || "var(--color-neutral-100)",
+                      borderColor: STATUS_COLORS[event.status]?.color || "var(--color-border)"
+                    }}
                   />
-                  <span className="text-[10px] font-bold text-center uppercase tracking-wider" style={{ color, lineHeight: 1.2 }}>
-                    {status.replace("_", " ")}
-                  </span>
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-wider" style={{ color: STATUS_COLORS[event.status]?.color || "var(--color-text-base)" }}>
+                      {event.status === "SUBMITTED" ? "Report Submitted" : event.status.replace("_", " ")}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
+                      {new Date(event.timestamp).toLocaleString()}
+                    </p>
+                  </div>
                 </div>
               );
             })}
@@ -192,6 +203,29 @@ export default function TrackReportPage({ params }) {
                   </div>
                 </>
               );
+            })()}
+            {(() => {
+              const resUrl = report.resolution_photo_url;
+              if (report.status === "RESOLVED" && resUrl && typeof resUrl === "string" && resUrl.trim() !== "") {
+                const trimmed = resUrl.trim();
+                const resImgSrc = (trimmed.startsWith("http://") || trimmed.startsWith("https://")) 
+                  ? trimmed 
+                  : supabase.storage.from("report-photos").getPublicUrl(trimmed).data.publicUrl;
+
+                return (
+                  <div className="mt-6 pt-6" style={{ borderTop: "1px solid var(--color-border)" }}>
+                    <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--color-status-resolved-text)" }}>Resolution Photo</p>
+                    <div style={{ borderRadius: "4px", overflow: "hidden", backgroundColor: "var(--color-neutral-50)", border: "1px solid var(--color-border)" }}>
+                      <img 
+                        src={resImgSrc} 
+                        alt="Resolution Photo" 
+                        style={{ width: "100%", height: "auto", display: "block" }} 
+                      />
+                    </div>
+                  </div>
+                );
+              }
+              return null;
             })()}
           </div>
         </div>

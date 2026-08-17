@@ -17,33 +17,38 @@ export default function MyReportsPage() {
   const { user, loading: authLoading } = useAuth();
   const [reports, setReports] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  async function loadReports() {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(false);
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from("reports")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (fetchErr) {
+        console.error("Error fetching my reports:", fetchErr);
+        setError(true);
+      } else {
+        setReports(data || []);
+      }
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+      setError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadReports() {
-      if (!user) {
-        setIsLoading(false);
-        return;
-      }
-      
-      try {
-        const { data, error } = await supabase
-          .from("reports")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-
-        if (error) {
-          console.error("Error fetching my reports:", error);
-        } else {
-          setReports(data || []);
-        }
-      } catch (err) {
-        console.error("Error fetching reports:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
     if (!authLoading) {
       loadReports();
     }
@@ -64,6 +69,16 @@ export default function MyReportsPage() {
       {authLoading || isLoading ? (
         <div className="card text-center py-12">
           <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Loading your reports...</p>
+        </div>
+      ) : error ? (
+        <div className="card text-center py-12">
+          <p className="text-3xl mb-3">⚠️</p>
+          <p className="font-semibold text-sm mb-4" style={{ color: "var(--color-neutral-700)" }}>
+            Unable to load your reports.
+          </p>
+          <button onClick={loadReports} className="btn-secondary">
+            Try Again
+          </button>
         </div>
       ) : !user ? (
         <div className="card text-center py-12">

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useState, useEffect } from "react";
 
-export default function CompleteProfilePage() {
+function CompleteProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "/";
@@ -53,7 +54,7 @@ export default function CompleteProfilePage() {
     }
 
     checkProfile();
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, returnTo]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -181,5 +182,17 @@ export default function CompleteProfilePage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function CompleteProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="page-container-narrow flex items-center justify-center min-h-[50vh]">
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Loading...</p>
+      </div>
+    }>
+      <CompleteProfileContent />
+    </Suspense>
   );
 }
