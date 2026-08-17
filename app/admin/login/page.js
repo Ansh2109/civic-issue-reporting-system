@@ -17,7 +17,7 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -25,10 +25,36 @@ export default function AdminLoginPage() {
       if (signInError) {
         throw signInError;
       }
+      
+      const user = data?.user;
+      if (!user) {
+        throw new Error("Failed to authenticate user: no user returned.");
+      }
 
-      router.push("/admin/dashboard");
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        throw new Error(`Error fetching profile role: ${profileError.message}`);
+      }
+
+      if (!profile) {
+        throw new Error("No profile found for this user. Please ensure the user has a row in the profiles table.");
+      }
+
+      if (profile.role === "worker") {
+        router.push("/worker/dashboard");
+      } else if (profile.role === "admin") {
+        router.push("/admin/dashboard");
+      } else {
+        throw new Error(`Access denied: invalid role for this portal (${profile.role || "none"})`);
+      }
     } catch (err) {
-      setError(err.message);
+      console.error("Login flow error:", err);
+      setError(err.message || "An unexpected error occurred during login.");
     } finally {
       setIsLoading(false);
     }
@@ -45,9 +71,9 @@ export default function AdminLoginPage() {
             className="text-xs font-semibold uppercase tracking-widest mb-1"
             style={{ color: "var(--color-text-muted)" }}
           >
-            Administration
+            Staff Portal
           </p>
-          <h1 style={{ fontSize: "1.375rem" }}>Sign in to Dashboard</h1>
+          <h1 style={{ fontSize: "1.375rem" }}>Admin & Employee Login</h1>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">

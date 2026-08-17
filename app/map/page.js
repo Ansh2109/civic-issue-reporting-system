@@ -25,6 +25,7 @@ export default function MapPage() {
         const { data, error: err } = await supabase
           .from("reports")
           .select("*")
+          .neq("status", "RESOLVED")
           .order("created_at", { ascending: false });
 
         if (err) throw err;

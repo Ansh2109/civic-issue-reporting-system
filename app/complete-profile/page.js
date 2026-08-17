@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function CompleteProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo") || "/";
   const { user, loading: authLoading } = useAuth();
   
   const [isLoading, setIsLoading] = useState(true);
@@ -36,7 +38,7 @@ export default function CompleteProfilePage() {
 
         // If the profile already has both fields, no need to be here
         if (data && data.full_name && data.phone_number) {
-          router.replace("/");
+          router.replace(returnTo);
         } else {
           // Pre-fill if they partially filled it
           if (data?.full_name) setFullName(data.full_name);
@@ -88,7 +90,7 @@ export default function CompleteProfilePage() {
 
       if (upsertError) throw upsertError;
 
-      router.push("/");
+      router.push(returnTo);
     } catch (err) {
       console.error("Error updating profile:", err);
       setError(err.message || "Failed to save profile. Please try again.");
