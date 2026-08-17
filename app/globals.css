@@ -45,13 +45,13 @@
   --color-status-submitted-text: #92400E;
   --color-status-submitted-ring: #D97706;
 
-  --color-status-acknowledged-bg:   #F0FDF9;
-  --color-status-acknowledged-text: #134E4A;
-  --color-status-acknowledged-ring: #14B8A6;
+  --color-status-acknowledged-bg:   #F0F9FF;
+  --color-status-acknowledged-text: #0C4A6E;
+  --color-status-acknowledged-ring: #0284C7;
 
-  --color-status-inprogress-bg:   #F0F9FF;
-  --color-status-inprogress-text: #0C4A6E;
-  --color-status-inprogress-ring: #0284C7;
+  --color-status-inprogress-bg:   #FEFCE8;
+  --color-status-inprogress-text: #854D0E;
+  --color-status-inprogress-ring: #EAB308;
 
   --color-status-resolved-bg:   #F0FDF4;
   --color-status-resolved-text: #14532D;
@@ -128,9 +128,10 @@ h3 {
  */
 .card {
   background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 1.5rem;        /* 24px */
+  border: 1px solid rgba(28, 25, 23, 0.04);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px -2px rgba(28, 25, 23, 0.03), 0 2px 6px -1px rgba(28, 25, 23, 0.02);
 }
 
 /* ─── Utility: btn-primary ──────────────────────────────────────────────── */
@@ -149,7 +150,7 @@ h3 {
   font-size: 0.875rem;
   font-weight: 500;
   font-family: var(--font-sans);
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid var(--color-brand);
   cursor: pointer;
   transition: background-color 140ms ease;
@@ -184,7 +185,7 @@ h3 {
   font-size: 0.875rem;
   font-weight: 500;
   font-family: var(--font-sans);
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
   cursor: pointer;
   transition: background-color 140ms ease, border-color 140ms ease;
@@ -242,20 +243,20 @@ h3 {
 
 .form-input {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.875rem;
   background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border: 1px solid rgba(28, 25, 23, 0.15);
+  border-radius: 6px;
   font-size: 0.9375rem;
   font-family: var(--font-sans);
   color: var(--color-text-base);
-  transition: border-color 140ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .form-input:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgb(194 65 12 / 0.10);
+  box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.15);
 }
 
 .form-input::placeholder {

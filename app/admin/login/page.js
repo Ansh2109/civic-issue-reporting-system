@@ -55,7 +55,7 @@ export default function AdminLoginPage() {
             <div
               style={{
                 padding: "0.75rem",
-                borderRadius: "4px",
+                borderRadius: "6px",
                 backgroundColor: "var(--color-status-submitted-bg)",
                 border: "1px solid var(--color-status-submitted-ring)",
                 color: "var(--color-status-submitted-text)",

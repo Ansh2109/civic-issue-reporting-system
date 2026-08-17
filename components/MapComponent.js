@@ -59,9 +59,16 @@ export default function MapComponent({ reports }) {
                     }}
                   />
                 )}
-                <h3 style={{ margin: "0 0 4px 0", fontSize: "14px", fontWeight: 600, color: "var(--color-text-base)" }}>
-                  {report.category}
-                </h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
+                  <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: "var(--color-text-base)" }}>
+                    {report.category}
+                  </h3>
+                  {report.ticket_number && (
+                    <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--color-text-faint)" }}>
+                      {report.ticket_number}
+                    </span>
+                  )}
+                </div>
                 <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "var(--color-text-muted)" }}>
                   {report.description}
                 </p>
@@ -86,8 +93,16 @@ export default function MapComponent({ reports }) {
                       color: "var(--color-text-base)",
                     }}
                   >
-                    Status: {report.status}
+                    Priority: {report.urgency}
                   </span>
+                  <span className={`status-badge status-badge-${report.status.toLowerCase().replace("_", "")}`}>
+                    {report.status}
+                  </span>
+                </div>
+                <div style={{ marginTop: "8px", textAlign: "center" }}>
+                  <a href={`/track/${report.id}`} style={{ fontSize: "12px", color: "var(--color-accent)", textDecoration: "none", fontWeight: 500 }}>
+                    View details →
+                  </a>
                 </div>
               </div>
             </Popup>

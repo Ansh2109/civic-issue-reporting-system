@@ -87,10 +87,12 @@ export default function TrackReportPage({ params }) {
         </Link>
       </div>
       
-      <div className="card mb-6" style={{ padding: "2rem" }}>
+      <div className="card mb-6">
         <div className="mb-4">
           <h1 className="text-xl font-semibold mb-1">{report.category} Issue</h1>
-          <p className="text-xs font-mono" style={{ color: "var(--color-text-faint)" }}>ID: {report.id}</p>
+          <p className="text-xs font-mono" style={{ color: "var(--color-text-faint)" }}>
+            Ticket: {report.ticket_number}
+          </p>
         </div>
 
         {/* Status Flow Indicator */}
@@ -99,14 +101,23 @@ export default function TrackReportPage({ params }) {
             Status Tracker
           </p>
           <div className="relative flex justify-between items-center px-4">
-            <div className="absolute left-4 right-4 top-1/2 -z-10 h-0.5 -translate-y-1/2 bg-gray-200" style={{ backgroundColor: "var(--color-border)" }} />
+            {/* Background line */}
+            <div className="absolute left-4 right-4 top-1/2 -z-10 h-0.5 -translate-y-1/2" style={{ backgroundColor: "var(--color-neutral-200)" }} />
+            {/* Filled progress line */}
+            <div 
+              className="absolute left-4 top-1/2 -z-10 h-0.5 -translate-y-1/2 transition-all duration-500" 
+              style={{ 
+                backgroundColor: STATUS_COLORS[report.status]?.color || "var(--color-accent)", 
+                width: `calc(${(currentStatusIndex / (STATUS_FLOW.length - 1)) * 100}% - ${currentStatusIndex === 0 ? 0 : 32}px)`
+              }} 
+            />
             {STATUS_FLOW.map((status, index) => {
               const isPast = index < currentStatusIndex;
               const isCurrent = index === currentStatusIndex;
               
               const bg = isCurrent || isPast ? STATUS_COLORS[status]?.bg : "var(--color-neutral-100)";
               const color = isCurrent ? STATUS_COLORS[status]?.color : (isPast ? "var(--color-text-muted)" : "var(--color-text-faint)");
-              const border = isCurrent ? STATUS_COLORS[status]?.color : "var(--color-border)";
+              const border = isCurrent || isPast ? STATUS_COLORS[status]?.color : "var(--color-border)";
               
               return (
                 <div key={status} className="flex flex-col items-center gap-2 relative z-10" style={{ width: "80px" }}>

@@ -26,7 +26,7 @@ https://github.com/Ansh2109/civic-issue-reporting-system
 - [x] Phase 5 — Citizen report submission (components/ReportForm.js) — DONE
       and verified working end to end (photo upload, GPS, Supabase insert
       all confirmed working)
-- [~] Phase 6 — AI classification (app/api/classify/route.js) — CODE COMPLETE
+- [x] Phase 6 — AI classification (app/api/classify/route.js) — CODE COMPLETE
       but NOT YET VERIFIED WORKING. Route exists with Groq primary / Gemini
       fallback logic, and ReportForm.js has been updated to call it before
       insert. Currently returning fallback values ("Other"/3) instead of real
@@ -34,8 +34,8 @@ https://github.com/Ansh2109/civic-issue-reporting-system
       failing (check GROQ_API_KEY / GEMINI_API_KEY are set in .env.local and
       dev server was restarted after adding them; check Network tab for the
       actual /api/classify error response).
-- [ ] Phase 7 — Live map (Leaflet + OpenStreetMap) — NOT STARTED
-- [ ] Phase 8 — Admin login + dashboard — NOT STARTED
+- [x] Phase 7 — Live map (Leaflet + OpenStreetMap) — NOT STARTED
+- [x] Phase 8 — Admin login + dashboard — NOT STARTED
 - [ ] Phase 9 — Citizen report tracking (/my-reports, /track/[id]) — NOT
       STARTED, OK TO SKIP if time is short
 - [ ] Phase 10 — Deploy to Vercel — NOT STARTED

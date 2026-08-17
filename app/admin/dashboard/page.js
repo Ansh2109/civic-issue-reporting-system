@@ -146,7 +146,7 @@ export default function AdminDashboardPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
             <thead>
               <tr style={{ backgroundColor: "var(--color-neutral-50)", borderBottom: "1px solid var(--color-border)" }}>
-                {["ID", "Category", "Description", "Urgency", "Status", "Date", "Action"].map((h) => (
+                {["Ticket", "Category", "Description", "Urgency", "Status", "Date", "Action"].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -185,7 +185,7 @@ export default function AdminDashboardPage() {
                     style={{ borderBottom: "1px solid var(--color-border)" }}
                   >
                     <td style={{ padding: "0.75rem 1rem", color: "var(--color-text-muted)", fontFamily: "monospace", fontSize: "0.8125rem" }}>
-                      {row.id.split("-")[0]}
+                      {row.ticket_number}
                     </td>
                     <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-600)" }}>{row.category}</td>
                     <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-700)", maxWidth: "18rem" }}>

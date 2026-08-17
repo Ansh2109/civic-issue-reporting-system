@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import GoogleSignIn from "@/components/GoogleSignIn";
 
 const STATUS_COLORS = {
   SUBMITTED:    { bg: "var(--color-status-submitted-bg)",    color: "var(--color-status-submitted-text)" },
@@ -12,25 +14,22 @@ const STATUS_COLORS = {
 };
 
 export default function MyReportsPage() {
+  const { user, loading: authLoading } = useAuth();
   const [reports, setReports] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasNoIds, setHasNoIds] = useState(false);
 
   useEffect(() => {
     async function loadReports() {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+      
       try {
-        const savedIds = JSON.parse(localStorage.getItem("myReportIds") || "[]");
-        
-        if (savedIds.length === 0) {
-          setHasNoIds(true);
-          setIsLoading(false);
-          return;
-        }
-
         const { data, error } = await supabase
           .from("reports")
           .select("*")
-          .in("id", savedIds)
+          .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
         if (error) {
@@ -39,14 +38,16 @@ export default function MyReportsPage() {
           setReports(data || []);
         }
       } catch (err) {
-        console.error("Error reading from localStorage:", err);
+        console.error("Error fetching reports:", err);
       } finally {
         setIsLoading(false);
       }
     }
 
-    loadReports();
-  }, []);
+    if (!authLoading) {
+      loadReports();
+    }
+  }, [user, authLoading]);
 
   return (
     <div className="page-container">
@@ -60,11 +61,19 @@ export default function MyReportsPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {authLoading || isLoading ? (
         <div className="card text-center py-12">
           <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Loading your reports...</p>
         </div>
-      ) : hasNoIds || reports.length === 0 ? (
+      ) : !user ? (
+        <div className="card text-center py-12">
+          <p className="text-3xl mb-3">🔒</p>
+          <p className="font-semibold text-sm mb-4" style={{ color: "var(--color-neutral-700)" }}>
+            Sign in to see your reports
+          </p>
+          <GoogleSignIn />
+        </div>
+      ) : reports.length === 0 ? (
         <div className="card text-center py-12">
           <p className="text-3xl mb-3">📭</p>
           <p className="font-semibold text-sm" style={{ color: "var(--color-neutral-700)" }}>
@@ -79,8 +88,8 @@ export default function MyReportsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {reports.map((report) => (
-            <Link key={report.id} href={`/track/${report.id}`} style={{ textDecoration: "none" }}>
-              <div className="card h-full transition-colors hover:border-gray-400" style={{ display: "flex", gap: "1rem", cursor: "pointer", borderColor: "var(--color-border)" }}>
+            <Link key={report.id} href={`/track/${report.id}`} style={{ textDecoration: "none" }} className="group">
+              <div className="card h-full transition-all duration-300 group-hover:shadow-lg group-hover:border-[rgba(28,25,23,0.1)]" style={{ display: "flex", gap: "1rem", cursor: "pointer" }}>
                 {(() => {
                   const url = report.photo_url;
                   let imgSrc = null;
@@ -116,11 +125,7 @@ export default function MyReportsPage() {
                       {report.category}
                     </h3>
                     <span
-                      className="text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-                      style={{
-                        backgroundColor: STATUS_COLORS[report.status]?.bg || "var(--color-neutral-100)",
-                        color: STATUS_COLORS[report.status]?.color || "var(--color-text-base)",
-                      }}
+                      className={`status-badge status-badge-${report.status.toLowerCase().replace("_", "")}`}
                     >
                       {report.status}
                     </span>
@@ -129,6 +134,7 @@ export default function MyReportsPage() {
                     {report.description}
                   </p>
                   <p className="text-xs mt-auto" style={{ color: "var(--color-text-faint)" }}>
+                    {report.ticket_number && <span className="font-mono mr-2">{report.ticket_number}</span>}
                     {new Date(report.created_at).toLocaleDateString()}
                   </p>
                 </div>

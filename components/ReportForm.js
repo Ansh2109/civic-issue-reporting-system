@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import GoogleSignIn from "@/components/GoogleSignIn";
 
 /* ── Constants ──────────────────────────────────────────── */
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -14,6 +16,7 @@ const GEO = { IDLE: "idle", LOCATING: "locating", OK: "ok", DENIED: "denied", UN
 const FORM = { IDLE: "idle", SUBMITTING: "submitting", SUCCESS: "success", ERROR: "error" };
 
 export default function ReportForm() {
+  const { user } = useAuth();
   /* ── Photo state ────────────────────────────────────────── */
   const [photo, setPhoto]         = useState(null);   // File object
   const [preview, setPreview]     = useState(null);   // Object URL for <img>
@@ -31,7 +34,7 @@ export default function ReportForm() {
   /* ── Form submission state ──────────────────────────────── */
   const [formState, setFormState]     = useState(FORM.IDLE);
   const [submitError, setSubmitError] = useState("");
-  const [newReportId, setNewReportId] = useState(null);
+  const [submittedReport, setSubmittedReport] = useState(null);
 
   /* ── Auto-request GPS on mount ───────────────────────────── */
   useEffect(() => {
@@ -179,6 +182,7 @@ export default function ReportForm() {
       const { data: inserted, error: insertError } = await supabase
         .from("reports")
         .insert({
+          user_id:     user.id,
           photo_url:   photoUrl,
           description: description.trim(),
           lat:         coords.lat,
@@ -187,7 +191,7 @@ export default function ReportForm() {
           urgency:     urgency,
           status:      "SUBMITTED",
         })
-        .select("id")
+        .select("*")
         .single();
 
       if (insertError) throw new Error(`Could not save report: ${insertError.message}`);
@@ -203,7 +207,7 @@ export default function ReportForm() {
         console.warn("Failed to save report ID to localStorage", storageErr);
       }
 
-      setNewReportId(inserted.id);
+      setSubmittedReport(inserted);
       setFormState(FORM.SUCCESS);
 
     } catch (err) {
@@ -214,63 +218,91 @@ export default function ReportForm() {
   }
 
   /* ── Success screen ─────────────────────────────────────── */
-  if (formState === FORM.SUCCESS) {
+  if (formState === FORM.SUCCESS && submittedReport) {
     return (
-      <div className="card text-center" style={{ padding: "2.5rem 2rem" }}>
+      <div className="card text-center" style={{ padding: "3rem 2rem", border: "2px solid var(--color-status-resolved-ring)" }}>
         <div
           style={{
-            width: "48px",
-            height: "48px",
+            width: "56px",
+            height: "56px",
             borderRadius: "50%",
             backgroundColor: "var(--color-status-resolved-bg)",
+            color: "var(--color-status-resolved-text)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            margin: "0 auto 1rem",
-            fontSize: "1.5rem",
+            margin: "0 auto 1.5rem",
+            fontSize: "1.75rem",
           }}
         >
           ✓
         </div>
-        <h2 style={{ color: "var(--color-status-resolved-text)", marginBottom: "0.5rem" }}>
-          Report submitted
+        <h2 style={{ color: "var(--color-text-base)", marginBottom: "0.5rem", fontSize: "1.25rem", fontWeight: 600 }}>
+          Report submitted successfully
         </h2>
-        <p className="text-sm" style={{ color: "var(--color-text-muted)", marginBottom: "1rem" }}>
-          City staff will review and update the status.
+        <p className="text-sm" style={{ color: "var(--color-text-muted)", marginBottom: "1.5rem" }}>
+          Thank you for reporting this issue. City staff will review it shortly.
         </p>
-        <p
-          className="text-xs"
-          style={{
-            fontFamily: "monospace",
-            backgroundColor: "var(--color-neutral-100)",
-            borderRadius: "4px",
-            padding: "0.5rem 0.75rem",
-            display: "inline-block",
-            color: "var(--color-text-muted)",
-            marginBottom: "1.5rem",
-            wordBreak: "break-all",
+        
+        <div 
+          style={{ 
+            backgroundColor: "var(--color-neutral-50)", 
+            padding: "1.5rem", 
+            borderRadius: "6px", 
+            border: "1px solid var(--color-border)",
+            marginBottom: "1.5rem"
           }}
         >
-          Report ID: {newReportId}
-        </p>
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+          <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: "var(--color-text-faint)", marginBottom: "0.5rem" }}>
+            Your Ticket Number
+          </p>
+          <p 
+            className="font-mono" 
+            style={{ 
+              fontSize: "2rem", 
+              fontWeight: 700, 
+              color: "var(--color-text-base)",
+              letterSpacing: "0.05em",
+              marginBottom: "1rem"
+            }}
+          >
+            {submittedReport.ticket_number || submittedReport.id.split("-")[0]}
+          </p>
+          <p className="text-xs" style={{ color: "var(--color-text-muted)", marginBottom: "1rem" }}>
+            Save this ticket number to track your report's status.
+          </p>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", textAlign: "left", borderTop: "1px solid var(--color-border)", paddingTop: "1rem", marginTop: "1rem" }}>
+            <div>
+              <p className="text-xs font-semibold" style={{ color: "var(--color-text-faint)", textTransform: "uppercase" }}>Category</p>
+              <p className="text-sm font-medium" style={{ color: "var(--color-neutral-700)" }}>{submittedReport.category}</p>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <p className="text-xs font-semibold" style={{ color: "var(--color-text-faint)", textTransform: "uppercase" }}>Priority</p>
+              <p className="text-sm font-medium" style={{ color: "var(--color-neutral-700)" }}>Level {submittedReport.urgency}</p>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap", flexDirection: "column" }}>
+          <a href={`/track/${submittedReport.id}`} className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", justifyContent: "center", padding: "0.75rem 1.5rem" }}>
+            Track this report
+          </a>
           <button
             type="button"
-            className="btn-primary"
+            className="btn-secondary"
+            style={{ justifyContent: "center", padding: "0.75rem 1.5rem" }}
             onClick={() => {
               setFormState(FORM.IDLE);
               setPhoto(null);
               setPreview(null);
               setDescription("");
-              setNewReportId(null);
+              setSubmittedReport(null);
               setSubmitError("");
             }}
           >
-            Submit another
+            Submit another report
           </button>
-          <a href="/my-reports" className="btn-secondary">
-            View my reports
-          </a>
         </div>
       </div>
     );
@@ -283,10 +315,9 @@ export default function ReportForm() {
     <form onSubmit={handleSubmit} noValidate>
 
       {/* ── Photo upload ──────────────────────────────────── */}
-      <div style={{ marginBottom: "1.25rem" }}>
-        <label className="form-label" htmlFor="photo-upload">
-          Photo <span style={{ color: "#dc2626" }}>*</span>
-        </label>
+      <div className="card mb-6">
+        <h3 className="text-base font-semibold mb-1" style={{ color: "var(--color-text-base)" }}>1. Photo Evidence</h3>
+        <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>A clear photo helps city staff locate and assess the issue quickly.</p>
 
         {!preview ? (
           <label
@@ -309,7 +340,7 @@ export default function ReportForm() {
           >
             <span style={{ fontSize: "1.75rem" }}>📷</span>
             <span className="text-sm" style={{ color: "var(--color-text-muted)", fontWeight: 500 }}>
-              Tap to attach a photo
+              Take a photo
             </span>
             <span className="text-xs" style={{ color: "var(--color-text-faint)" }}>
               JPEG, PNG, WebP or HEIC · max 5 MB
@@ -319,6 +350,7 @@ export default function ReportForm() {
               ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/heic"
+              capture="environment"
               onChange={handlePhotoChange}
               disabled={isSubmitting}
               style={{ display: "none" }}
@@ -367,14 +399,17 @@ export default function ReportForm() {
         )}
 
         {photoError && (
-          <p className="text-xs" style={{ color: "#dc2626", marginTop: "0.375rem" }}>
+          <p className="text-xs mt-2" style={{ color: "#dc2626" }}>
             {photoError}
           </p>
         )}
       </div>
 
       {/* ── Description ───────────────────────────────────── */}
-      <div style={{ marginBottom: "1.25rem" }}>
+      <div className="card mb-6">
+        <h3 className="text-base font-semibold mb-1" style={{ color: "var(--color-text-base)" }}>2. Issue Details</h3>
+        <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>Provide enough detail so workers know what to bring.</p>
+        
         <label className="form-label" htmlFor="description">
           Description <span style={{ color: "#dc2626" }}>*</span>
         </label>
@@ -402,8 +437,9 @@ export default function ReportForm() {
       </div>
 
       {/* ── GPS status ────────────────────────────────────── */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <p className="form-label">Location</p>
+      <div className="card mb-8">
+        <h3 className="text-base font-semibold mb-1" style={{ color: "var(--color-text-base)" }}>3. Location</h3>
+        <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>Your location is automatically captured for accuracy.</p>
         <div
           style={{
             display: "flex",
@@ -497,16 +533,25 @@ export default function ReportForm() {
         </div>
       )}
 
-      {/* ── Submit ────────────────────────────────────────── */}
-      <button
-        type="submit"
-        id="submit-report-btn"
-        className="btn-primary"
-        disabled={isSubmitting || geoState === GEO.LOCATING}
-        style={{ width: "100%", justifyContent: "center" }}
-      >
-        {isSubmitting ? "Submitting…" : "Submit report"}
-      </button>
+      {/* ── Submit / Sign In ──────────────────────────────────── */}
+      {!user ? (
+        <div style={{ textAlign: "center", padding: "1rem 0" }}>
+          <p className="text-sm mb-3" style={{ color: "var(--color-text-muted)" }}>
+            Please sign in to submit a report.
+          </p>
+          <GoogleSignIn className="btn-primary w-full justify-center" />
+        </div>
+      ) : (
+        <button
+          type="submit"
+          id="submit-report-btn"
+          className="btn-primary"
+          disabled={isSubmitting || geoState === GEO.LOCATING}
+          style={{ width: "100%", justifyContent: "center" }}
+        >
+          {isSubmitting ? "Submitting…" : "Submit report"}
+        </button>
+      )}
     </form>
   );
 }
