@@ -381,7 +381,7 @@ export default function AdminDashboardPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
             <thead>
               <tr style={{ backgroundColor: "var(--color-neutral-50)", borderBottom: "1px solid var(--color-border)" }}>
-                {["Ticket", "Category", "Description", "Urgency", "Status", "Date", "Action"].map((h) => (
+                {["Ticket", "Category", "Department", "Description", "Urgency", "Status", "Date", "Action"].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -403,13 +403,13 @@ export default function AdminDashboardPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-muted)" }}>
+                  <td colSpan={8} style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-muted)" }}>
                     Loading reports...
                   </td>
                 </tr>
               ) : filteredReports.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-muted)" }}>
+                  <td colSpan={8} style={{ padding: "2rem", textAlign: "center", color: "var(--color-text-muted)" }}>
                     No reports found matching filters.
                   </td>
                 </tr>
@@ -422,7 +422,12 @@ export default function AdminDashboardPage() {
                     <td style={{ padding: "0.75rem 1rem", color: "var(--color-text-muted)", fontFamily: "monospace", fontSize: "0.8125rem" }}>
                       {row.ticket_number}
                     </td>
-                    <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-600)" }}>{row.category}</td>
+                    <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-600)", textTransform: "capitalize" }}>{row.category}</td>
+                    <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-600)" }}>
+                      <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", backgroundColor: "var(--color-neutral-100)", borderRadius: "4px" }}>
+                        {row.assigned_department || "General"}
+                      </span>
+                    </td>
                     <td style={{ padding: "0.75rem 1rem", color: "var(--color-neutral-700)", maxWidth: "18rem" }}>
                       <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }} title={row.description}>
                         {row.description}

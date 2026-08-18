@@ -13,11 +13,16 @@ const VALID_CATEGORIES = [
   "illegal_construction", "stray_animal", "traffic_signal", "roads", "other"
 ];
 
+const VALID_DEPARTMENTS = [
+  "Roads & Transport", "Sanitation", "Water Supply", "Electricity", 
+  "Public Works", "Animal Control", "General"
+];
+
 const SYSTEM_PROMPT =
   "You are a civic issue classifier. " +
-  "Classify the description into exactly one category and rate its urgency. " +
+  "Classify the description into exactly one category, rate its urgency, and assign it to the relevant department. " +
   "Respond with ONLY valid JSON — no markdown, no explanation, no extra text. " +
-  'Example: {"category":"pothole","urgency":4}';
+  'Example: {"category":"pothole","urgency":4,"department":"Roads & Transport"}';
 
 const USER_PROMPT = (description) =>
   `Classify this civic issue report:\n\n"${description}"\n\n` +
@@ -25,6 +30,7 @@ const USER_PROMPT = (description) =>
   '- "category" must be exactly one of: pothole, streetlight, garbage, water_leak, drainage, illegal_construction, stray_animal, traffic_signal, roads, other\n' +
   '- Pick "other" ONLY when nothing else genuinely fits.\n' +
   '- "urgency" must be an integer 1 (minor inconvenience) to 5 (immediate danger)\n' +
+  '- "department" must be exactly one of: Roads & Transport, Sanitation, Water Supply, Electricity, Public Works, Animal Control, General\n' +
   "Respond with ONLY the JSON object.";
 
 /* ── Shared validation ───────────────────────────────────────────────────── */
@@ -44,7 +50,7 @@ function parseAndValidate(text) {
     throw new Error(`Response is not valid JSON: ${text.slice(0, 200)}`);
   }
 
-  const { category, urgency } = parsed;
+  const { category, urgency, department } = parsed;
 
   if (!VALID_CATEGORIES.includes(category)) {
     console.error(`[classify] Invalid category received: "${category}"`);
@@ -55,8 +61,13 @@ function parseAndValidate(text) {
     console.error(`[classify] Invalid urgency received: "${urgency}"`);
     throw new Error(`Invalid urgency "${urgency}" — must be integer 1-5`);
   }
+  let finalDepartment = department;
+  if (!VALID_DEPARTMENTS.includes(finalDepartment)) {
+    console.warn(`[classify] Invalid department received: "${department}". Defaulting to General.`);
+    finalDepartment = "General";
+  }
 
-  return { category, urgency: u };
+  return { category, urgency: u, department: finalDepartment };
 }
 
 /* ── Groq (primary) ──────────────────────────────────────────────────────── */
@@ -72,7 +83,7 @@ async function classifyWithGroq(description) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "openai/gpt-oss-120b",
+      model: "llama3-8b-8192",
       temperature: 0,
       response_format: { 
         type: "json_schema", 
@@ -89,9 +100,13 @@ async function classifyWithGroq(description) {
                 type: "integer", 
                 minimum: 1, 
                 maximum: 5 
-              } 
+              },
+              department: {
+                type: "string",
+                enum: VALID_DEPARTMENTS
+              }
             }, 
-            required: ["category", "urgency"] 
+            required: ["category", "urgency", "department"] 
           } 
         } 
       },
@@ -121,7 +136,7 @@ async function classifyWithGemini(description) {
 
   const url =
     `https://generativelanguage.googleapis.com/v1/models/` +
-    `gemini-3.6-flash:generateContent?key=${apiKey}`;
+    `gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   const res = await fetch(url, {
     method: "POST",

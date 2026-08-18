@@ -29,6 +29,12 @@ export default function ReportForm() {
   /* ── Description state ──────────────────────────────────── */
   const [description, setDescription] = useState("");
 
+  /* ── Voice Recording state ──────────────────────────────── */
+  const [voiceState, setVoiceState] = useState("idle"); // idle, recording, processing
+  const [voiceError, setVoiceError] = useState("");
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
   /* ── GPS state ──────────────────────────────────────────── */
   const [geoState, setGeoState] = useState(GEO.IDLE);
   const [coords, setCoords]     = useState(null); // { lat, lng }
@@ -113,6 +119,118 @@ export default function ReportForm() {
       setPhotoError("Camera access is required to submit a report — please allow camera access.");
     }
   }
+
+  /* ── Voice Recording Handlers (MediaRecorder -> Groq) ───── */
+  const startRecording = async () => {
+    setVoiceError("");
+    setVoiceState("recording");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("[VOICE] microphone permission granted");
+
+      let selectedMimeType = "";
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        selectedMimeType = "audio/webm;codecs=opus";
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        selectedMimeType = "audio/webm";
+      } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+        selectedMimeType = "audio/mp4";
+      } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+        selectedMimeType = "audio/ogg";
+      } else {
+        selectedMimeType = "";
+      }
+      console.log("[VOICE] selected MIME type:", selectedMimeType || "default");
+
+      const mediaRecorder = selectedMimeType 
+        ? new MediaRecorder(stream, { mimeType: selectedMimeType }) 
+        : new MediaRecorder(stream);
+      console.log("[VOICE] MediaRecorder created");
+      
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          console.log("[VOICE] audio chunk received");
+          console.log("[VOICE] chunk size:", event.data.size);
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        console.log("[VOICE] recording stopped");
+        const mimeType = mediaRecorder.mimeType || "audio/webm";
+        let ext = "webm";
+        if (mimeType.includes("mp4")) ext = "mp4";
+        else if (mimeType.includes("ogg")) ext = "ogg";
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log("[VOICE] number of chunks:", audioChunksRef.current.length);
+        const totalBytes = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0);
+        console.log("[VOICE] total audio bytes:", totalBytes);
+        console.log("[VOICE] final blob type:", audioBlob.type);
+        console.log("[VOICE] final blob size:", audioBlob.size);
+
+        if (audioBlob.size < 100) { // Check for suspiciously small blob (e.g. 0 or just header bytes)
+          setVoiceError("No audio was recorded. Please try again.");
+          setVoiceState("idle");
+          return;
+        }
+
+        await handleTranscription(audioBlob, ext);
+      };
+
+      mediaRecorder.start();
+      console.log("[VOICE] recording started");
+    } catch (err) {
+      console.error("Microphone access denied or error:", err);
+      setVoiceError("Microphone access denied or unavailable.");
+      setVoiceState("idle");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && voiceState === "recording") {
+      mediaRecorderRef.current.stop();
+      setVoiceState("processing");
+      // Stop tracks to release mic
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+    }
+  };
+
+  const handleTranscription = async (audioBlob, ext) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", audioBlob, `recording.${ext}`);
+
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      console.log("[VOICE] transcribe response status:", response.status);
+
+      const data = await response.json();
+      console.log("[VOICE] transcribe response JSON:", data);
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Transcription failed");
+      }
+
+      console.log("[VOICE] received text:", data.text);
+
+      if (data.text) {
+        console.log("[VOICE] updating description:", data.text);
+        setDescription((prev) => (prev ? prev + " " + data.text : data.text));
+      }
+      setVoiceState("idle");
+    } catch (err) {
+      console.error(err);
+      setVoiceError(err.message || "Failed to transcribe audio.");
+      setVoiceState("idle");
+    }
+  };
 
   function capturePhoto() {
     if (!videoRef.current || !canvasRef.current) return;
@@ -201,6 +319,7 @@ export default function ReportForm() {
       // ── 3. Classify issue description using AI ───────────────
       let category = "other";
       let urgency = 3;
+      let department = "General";
       try {
         const classifyRes = await fetch("/api/classify", {
           method: "POST",
@@ -211,6 +330,7 @@ export default function ReportForm() {
           const classification = await classifyRes.json();
           if (classification.category) category = classification.category;
           if (classification.urgency) urgency = classification.urgency;
+          if (classification.department) department = classification.department;
         } else {
           console.warn("Classification failed (status", classifyRes.status, "), using defaults");
         }
@@ -229,6 +349,7 @@ export default function ReportForm() {
           lng:         coords.lng,
           category:    category,
           urgency:     urgency,
+          assigned_department: department,
           status:      "SUBMITTED",
         })
         .select("*")
@@ -488,6 +609,46 @@ export default function ReportForm() {
         <label className="form-label" htmlFor="description">
           Description <span style={{ color: "#dc2626" }}>*</span>
         </label>
+        
+        <div style={{ marginBottom: "0.5rem" }}>
+          {voiceState === "idle" && (
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={startRecording}
+              disabled={isSubmitting}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
+            >
+              🎤 Start voice
+            </button>
+          )}
+          {voiceState === "recording" && (
+            <button
+              type="button"
+              className="btn-primary text-xs"
+              onClick={stopRecording}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", backgroundColor: "#ef4444" }}
+            >
+              🔴 Listening... Tap to stop
+            </button>
+          )}
+          {voiceState === "processing" && (
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              disabled
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", opacity: 0.7 }}
+            >
+              ⏳ Transcribing...
+            </button>
+          )}
+          {voiceError && (
+            <p className="text-xs mt-1" style={{ color: "#dc2626" }}>
+              {voiceError}
+            </p>
+          )}
+        </div>
+
         <textarea
           id="description"
           className="form-input"
