@@ -30,10 +30,10 @@ export default function ReportForm() {
   const [description, setDescription] = useState("");
 
   /* ── Voice Recording state ──────────────────────────────── */
-  const [voiceState, setVoiceState] = useState("idle"); // idle, recording, processing
+  const [voiceState, setVoiceState] = useState("idle"); // idle, recording
   const [voiceError, setVoiceError] = useState("");
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
+  const recognitionRef = useRef(null);
+  const baselineDescRef = useRef("");
 
   /* ── GPS state ──────────────────────────────────────────── */
   const [geoState, setGeoState] = useState(GEO.IDLE);
@@ -97,6 +97,80 @@ export default function ReportForm() {
     );
   }
 
+  useEffect(() => {
+    console.log("[VOICE] component mounted");
+    if (typeof window === "undefined") return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    console.log("[VOICE] SpeechRecognition supported:", !!SpeechRecognition);
+    
+    if (!SpeechRecognition) return;
+
+    console.log("[VOICE] recognition initialized");
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-IN";
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      console.log("[VOICE] recognition onstart");
+      setVoiceState("recording");
+    };
+
+    recognition.onresult = (event) => {
+      console.log("[VOICE] recognition onresult");
+      let interimTranscript = "";
+      let finalTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      if (interimTranscript) console.log("[VOICE] interim transcript:", interimTranscript);
+      if (finalTranscript) console.log("[VOICE] final transcript:", finalTranscript);
+
+      const combinedSpeech = (finalTranscript + interimTranscript).trim();
+      const currentBase = baselineDescRef.current ? baselineDescRef.current + " " : "";
+      const combinedDesc = (currentBase + combinedSpeech).replace(/\s+/g, " ").trim();
+      
+      setDescription(combinedDesc);
+    };
+
+    recognition.onerror = (event) => {
+      console.log("[VOICE] recognition onerror:");
+      console.log("[VOICE] error type:", event.error);
+      console.log("[VOICE] error message:", event.message);
+
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setVoiceError("Microphone access was denied. Please allow microphone access and try again.");
+      } else if (event.error === "no-speech") {
+        setVoiceError("No speech detected. Please try again.");
+      } else {
+        setVoiceError(`Microphone error: ${event.error}`);
+      }
+      setVoiceState("idle");
+    };
+
+    recognition.onend = () => {
+      console.log("[VOICE] recognition onend");
+      setVoiceState("idle");
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    };
+  }, []);
+
   function stopCamera() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
@@ -120,114 +194,32 @@ export default function ReportForm() {
     }
   }
 
-  /* ── Voice Recording Handlers (MediaRecorder -> Groq) ───── */
-  const startRecording = async () => {
+  /* ── Voice Recording Handlers (Web Speech API) ──────────── */
+  const startRecording = () => {
+    console.log("[VOICE] start button clicked");
     setVoiceError("");
-    setVoiceState("recording");
+
+    if (!recognitionRef.current) {
+      setVoiceError("Voice input is not supported in this browser.");
+      return;
+    }
+
+    // Capture whatever text is currently in the description as the baseline
+    baselineDescRef.current = description.trim();
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      console.log("[VOICE] microphone permission granted");
-
-      let selectedMimeType = "";
-      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
-        selectedMimeType = "audio/webm;codecs=opus";
-      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
-        selectedMimeType = "audio/webm";
-      } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
-        selectedMimeType = "audio/mp4";
-      } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
-        selectedMimeType = "audio/ogg";
-      } else {
-        selectedMimeType = "";
-      }
-      console.log("[VOICE] selected MIME type:", selectedMimeType || "default");
-
-      const mediaRecorder = selectedMimeType 
-        ? new MediaRecorder(stream, { mimeType: selectedMimeType }) 
-        : new MediaRecorder(stream);
-      console.log("[VOICE] MediaRecorder created");
-      
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          console.log("[VOICE] audio chunk received");
-          console.log("[VOICE] chunk size:", event.data.size);
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        console.log("[VOICE] recording stopped");
-        const mimeType = mediaRecorder.mimeType || "audio/webm";
-        let ext = "webm";
-        if (mimeType.includes("mp4")) ext = "mp4";
-        else if (mimeType.includes("ogg")) ext = "ogg";
-        
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        console.log("[VOICE] number of chunks:", audioChunksRef.current.length);
-        const totalBytes = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0);
-        console.log("[VOICE] total audio bytes:", totalBytes);
-        console.log("[VOICE] final blob type:", audioBlob.type);
-        console.log("[VOICE] final blob size:", audioBlob.size);
-
-        if (audioBlob.size < 100) { // Check for suspiciously small blob (e.g. 0 or just header bytes)
-          setVoiceError("No audio was recorded. Please try again.");
-          setVoiceState("idle");
-          return;
-        }
-
-        await handleTranscription(audioBlob, ext);
-      };
-
-      mediaRecorder.start();
-      console.log("[VOICE] recording started");
+      console.log("[VOICE] calling recognition.start()");
+      recognitionRef.current.start();
     } catch (err) {
-      console.error("Microphone access denied or error:", err);
-      setVoiceError("Microphone access denied or unavailable.");
+      console.error(err);
+      setVoiceError("Failed to start speech recognition.");
       setVoiceState("idle");
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && voiceState === "recording") {
-      mediaRecorderRef.current.stop();
-      setVoiceState("processing");
-      // Stop tracks to release mic
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
-    }
-  };
-
-  const handleTranscription = async (audioBlob, ext) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", audioBlob, `recording.${ext}`);
-
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      });
-
-      console.log("[VOICE] transcribe response status:", response.status);
-
-      const data = await response.json();
-      console.log("[VOICE] transcribe response JSON:", data);
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Transcription failed");
-      }
-
-      console.log("[VOICE] received text:", data.text);
-
-      if (data.text) {
-        console.log("[VOICE] updating description:", data.text);
-        setDescription((prev) => (prev ? prev + " " + data.text : data.text));
-      }
-      setVoiceState("idle");
-    } catch (err) {
-      console.error(err);
-      setVoiceError(err.message || "Failed to transcribe audio.");
+    if (recognitionRef.current && voiceState === "recording") {
+      recognitionRef.current.stop();
       setVoiceState("idle");
     }
   };
@@ -319,7 +311,7 @@ export default function ReportForm() {
       // ── 3. Classify issue description using AI ───────────────
       let category = "other";
       let urgency = 3;
-      let department = "General";
+      let department = "general";
       try {
         const classifyRes = await fetch("/api/classify", {
           method: "POST",
@@ -330,12 +322,18 @@ export default function ReportForm() {
           const classification = await classifyRes.json();
           if (classification.category) category = classification.category;
           if (classification.urgency) urgency = classification.urgency;
-          if (classification.department) department = classification.department;
+          if (classification.assigned_department) department = classification.assigned_department;
         } else {
-          console.warn("Classification failed (status", classifyRes.status, "), using defaults");
+          console.warn("[CLASSIFY] request failed");
+          console.warn("[CLASSIFY] status:", classifyRes.status);
+          const errText = await classifyRes.text();
+          console.warn("[CLASSIFY] response:", errText);
+          console.warn("[CLASSIFY] using fallback");
         }
       } catch (err) {
-        console.warn("Classification error, using defaults:", err);
+        console.warn("[CLASSIFY] request failed");
+        console.warn("[CLASSIFY] response:", err.message);
+        console.warn("[CLASSIFY] using fallback");
       }
 
       // ── 4. Insert report row ─────────────────────────────────
@@ -630,16 +628,6 @@ export default function ReportForm() {
               style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", backgroundColor: "#ef4444" }}
             >
               🔴 Listening... Tap to stop
-            </button>
-          )}
-          {voiceState === "processing" && (
-            <button
-              type="button"
-              className="btn-secondary text-xs"
-              disabled
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", opacity: 0.7 }}
-            >
-              ⏳ Transcribing...
             </button>
           )}
           {voiceError && (

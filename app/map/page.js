@@ -18,15 +18,30 @@ export default function MapPage() {
   const [reports, setReports] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const validReports = reports?.filter(r => r.lat != null && r.lng != null && !isNaN(Number(r.lat)) && !isNaN(Number(r.lng))) || [];
+  
+  useEffect(() => {
+    console.log("[MAP] component mounted");
+    if (reports) {
+      console.log("[MAP] valid coordinates:", validReports.length);
+      console.log("[MAP] invalid coordinates:", reports.length - validReports.length);
+      console.log("[MAP] rendering markers:", validReports.length);
+    }
+  }, [reports, validReports.length]);
 
   useEffect(() => {
     async function fetchReports() {
+      console.log("[MAP] fetching reports");
       try {
         const res = await fetch("/api/map/reports");
         if (!res.ok) throw new Error("Failed to load map data");
         const data = await res.json();
-        setReports(data.reports || []);
+        const fetched = data.reports || [];
+        console.log("[MAP] reports fetched: true");
+        console.log("[MAP] report count:", fetched.length);
+        setReports(fetched);
       } catch (err) {
+        console.log("[MAP] Supabase error:", err.message);
         console.error("Error fetching reports:", err);
         setError("Failed to load reports.");
       } finally {

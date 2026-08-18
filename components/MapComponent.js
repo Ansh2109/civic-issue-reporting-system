@@ -19,7 +19,7 @@ function BoundsFitter({ reports }) {
     if (reports && reports.length > 0) {
       const validReports = reports.filter(r => r.lat != null && r.lng != null);
       if (validReports.length > 0) {
-        const bounds = L.latLngBounds(validReports.map((r) => [r.lat, r.lng]));
+        const bounds = L.latLngBounds(validReports.map((r) => [Number(r.lat), Number(r.lng)]));
         map.fitBounds(bounds, { padding: [50, 50] });
       }
     }
@@ -32,7 +32,7 @@ export default function MapComponent({ reports }) {
   const defaultCenter = [20.5937, 78.9629];
   const defaultZoom = 5;
 
-  const validReports = reports?.filter(r => r.lat != null && r.lng != null) || [];
+  const validReports = reports?.filter(r => r.lat != null && r.lng != null && !isNaN(Number(r.lat)) && !isNaN(Number(r.lng))) || [];
 
   return (
     <div style={{ height: "100%", width: "100%", position: "relative" }}>
@@ -48,7 +48,7 @@ export default function MapComponent({ reports }) {
         <BoundsFitter reports={validReports} />
 
         {validReports.map((report) => (
-          <Marker key={report.id} position={[report.lat, report.lng]}>
+          <Marker key={report.id} position={[Number(report.lat), Number(report.lng)]}>
             <Popup>
               <div style={{ maxWidth: "220px", fontFamily: "var(--font-sans, sans-serif)" }}>
                 {report.photo_url && (
